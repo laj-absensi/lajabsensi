@@ -312,7 +312,7 @@ function buildUrl(paramsObj: {
   }
   return `/dashboard?${sp.toString()}`;
 }
-export const dynamic = "force-dynamic";
+import { Suspense } from "react";
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
   const supabase = await createClient();
