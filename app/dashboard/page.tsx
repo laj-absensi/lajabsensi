@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -161,16 +162,18 @@ type MenuKey =
   | "log"
   | "pengaturan";
 
+type DashboardSearchParams = Promise<{
+  menu?: string;
+  tanggal?: string;
+  departemenId?: string;
+  q?: string;
+  page?: string;
+  status?: string;
+  message?: string;
+}>;
+
 type DashboardPageProps = {
-  searchParams: Promise<{
-    menu?: string;
-    tanggal?: string;
-    departemenId?: string;
-    q?: string;
-    page?: string;
-    status?: string;
-    message?: string;
-  }>;
+  searchParams: DashboardSearchParams;
 };
 
 const VALID_MENUS: MenuKey[] = [
@@ -237,9 +240,7 @@ function formatDateTimeWita(isoString: string): string {
 function computeHoursBetween(startHm: string, endHm: string): number {
   const [sh, sm] = startHm.split(":").map(Number);
   const [eh, em] = endHm.split(":").map(Number);
-  if (
-    [sh, sm, eh, em].some((n) => Number.isNaN(n))
-  ) {
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) {
     return 1;
   }
   const startMins = sh * 60 + sm;
@@ -312,8 +313,12 @@ function buildUrl(paramsObj: {
   }
   return `/dashboard?${sp.toString()}`;
 }
-import { Suspense } from "react";
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+
+async function DashboardPageContent({
+  searchParams,
+}: {
+  searchParams: DashboardSearchParams;
+}) {
   const params = await searchParams;
   const supabase = await createClient();
 
@@ -489,7 +494,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const ownEmployee = employees.find((e) => e.user_id === user.id) ?? null;
   const unreadNotifCount = notifications.filter((n) => !n.is_read).length;
 
-  // Server Actions
   async function signOutAction() {
     "use server";
     const s = await createClient();
@@ -1405,7 +1409,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     );
   }
 
-  // Perhitungan 6 Kartu Statistik Hari Ini (WITA) dari data aktual
   const todayAttendance = attendanceList.filter(
     (a) => a.attendance_date === todayWita
   );
@@ -1435,7 +1438,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     (e) => !checkedInEmpIds.has(e.id)
   );
 
-  // Data Grafik Aktual
   const last7Dates = Array.from({ length: 7 }, (_, idx) =>
     shiftDateDays(todayWita, -(6 - idx))
   );
@@ -1482,7 +1484,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     };
   });
 
-  // Filter & Pencarian Tabel Absensi
   const filteredAttendance = attendanceList.filter((row) => {
     const emp = empMap.get(row.employee_id);
     if (filterTanggal && row.attendance_date !== filterTanggal) return false;
@@ -1496,7 +1497,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     return true;
   });
 
-  // Filter Jadwal Kerja
   const filteredSchedules = schedules.filter((sc) => {
     const emp = empMap.get(sc.employee_id);
     if (filterTanggal && sc.schedule_date !== filterTanggal) return false;
@@ -1518,7 +1518,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     safePage * pageSize
   );
 
-  // CSV Export (kompatibel Excel)
   const csvRows = [
     [
       "Tanggal",
@@ -1641,7 +1640,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <main className="min-h-screen bg-[#f4f6fb] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1520px] flex-col lg:flex-row">
-        {/* Sidebar Navigasi LAJAbsensi */}
         <aside className="border-b border-slate-200 bg-white lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 lg:px-5 lg:py-4">
             <div className="flex items-center gap-2.5">
@@ -1725,9 +1723,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </aside>
 
-        {/* Konten Utama */}
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Header Navigasi Atas */}
           <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
             <div>
               <h1 className="text-base sm:text-lg font-bold capitalize text-slate-900">
@@ -1776,7 +1772,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
 
-            {/* Filter Tanggal & Departemen Global */}
             <form
               method="GET"
               action="/dashboard"
@@ -1843,7 +1838,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               )}
             </form>
 
-            {/* 1. DASHBOARD UTAMA */}
             {activeMenu === "dashboard" && (
               <div className="space-y-5">
                 <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
@@ -1981,7 +1975,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
 
-            {/* Tabel Absensi Terbaru / Riwayat (Dashboard & Absensi) */}
             {(activeMenu === "dashboard" || activeMenu === "absensi") && (
               <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-2xs space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2163,7 +2156,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </section>
             )}
 
-            {/* 2. DATA KARYAWAN, DEPARTEMEN & JABATAN */}
             {activeMenu === "karyawan" && (
               <div className="space-y-5">
                 {canManageMaster && (
@@ -2371,7 +2363,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
 
-            {/* 3. LOKASI & GPS */}
             {activeMenu === "lokasi" && (
               <div className="space-y-5">
                 {canManageMaster && (
@@ -2476,7 +2467,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
 
-            {/* 4. VERIFIKASI WAJAH & FOTO SELFIE */}
             {activeMenu === "wajah" && (
               <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-2xs space-y-4">
                 <div>
@@ -2549,7 +2539,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </section>
             )}
 
-            {/* 5. JADWAL & SHIFT */}
             {activeMenu === "jadwal" && (
               <div className="space-y-5">
                 {canManageMaster && (
@@ -2760,7 +2749,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
 
-            {/* 6. LEMBUR */}
             {activeMenu === "lembur" && (
               <div className="space-y-5">
                 <form
@@ -2948,7 +2936,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
 
-            {/* 7. CUTI & IZIN */}
             {activeMenu === "cuti" && (
               <div className="space-y-5">
                 <form
@@ -3136,7 +3123,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             )}
 
-            {/* 8. TIMESHEET REKAP KARYAWAN */}
             {activeMenu === "timesheet" && (
               <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-2xs space-y-4">
                 <div>
@@ -3232,7 +3218,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </section>
             )}
 
-            {/* 9. LAPORAN */}
             {activeMenu === "laporan" && (
               <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-2xs space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -3283,7 +3268,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </section>
             )}
 
-            {/* 10. NOTIFIKASI */}
             {activeMenu === "notifikasi" && (
               <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-2xs space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3335,7 +3319,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </section>
             )}
 
-            {/* 11. LOG AKTIVITAS */}
             {activeMenu === "log" && (
               <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-2xs space-y-3">
                 <h2 className="text-sm font-bold text-slate-900">
@@ -3374,7 +3357,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </section>
             )}
 
-            {/* 12. PENGATURAN APLIKASI */}
             {activeMenu === "pengaturan" && (
               <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-2xs space-y-4">
                 <div>
@@ -3498,5 +3480,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
       </div>
     </main>
+  );
+}
+
+export default function DashboardPage({ searchParams }: DashboardPageProps) {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#f4f6fb] p-6 text-slate-900">
+          <div className="mx-auto max-w-[1520px] space-y-4">
+            <div className="h-8 w-52 animate-pulse rounded bg-slate-200" />
+            <div className="h-64 w-full animate-pulse rounded-xl bg-slate-200" />
+          </div>
+        </main>
+      }
+    >
+      <DashboardPageContent searchParams={searchParams} />
+    </Suspense>
   );
 }
